@@ -152,8 +152,16 @@
   }
   .hero-eyebrow .meteor { width: 22px; height: 20px; }
   .hero-logo {
-    width: min(460px, 72vw); margin: 8px 0 0;
-    animation: rise 1.2s 0.25s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+    width: min(460px, 72vw);
+    /* le viewBox garde ~24% de vide haut/bas pour l'enveloppe des ondes —
+       on le compense en layout, les ondes débordent en transparence */
+    margin: calc(min(460px, 72vw) * -0.13) 0 calc(min(460px, 72vw) * -0.11);
+    animation: logoIn 1.5s 0.2s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  }
+  @keyframes logoIn {
+    from { opacity: 0; transform: scale(0.92) translateY(24px); filter: blur(14px); }
+    60% { filter: blur(0); }
+    to { opacity: 1; transform: none; filter: none; }
   }
   .hero-dialogue {
     min-height: 52px; display: flex; align-items: flex-start; justify-content: center;
@@ -342,7 +350,7 @@
     background: rgba(5, 5, 6, 0.75);
     padding: 26px 20px 18px; text-align: center;
   }
-  .master-frame .wave { width: min(150px, 60%); margin: 0 auto; display: block; }
+  .master-frame .wave { width: min(150px, 60%); margin: -7% auto -6%; display: block; }
   .master-name { display: block; margin-top: 14px; font-family: var(--font-dots); font-weight: 900; font-size: 17px; letter-spacing: 0.14em; }
   .master-sub { display: block; margin-top: 5px; font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.1em; color: var(--faint); }
   .console {
@@ -811,6 +819,9 @@ initGlitch(document.getElementById('glitchTitle'), { min: 2800, max: 6500 })
    HERO — particules aspirées + monologue tapé
    ═══════════════════════════════════════════════════════════ */
 const heroWave = createWaveform(document.getElementById('heroLogo'), { intensity: 1, sampleCount: 700 })
+// le logo arrive vivant : les ondes démarrent pendant l'entrée,
+// le monologue (1300ms) prend le relais puis les relâche en fin de phrase
+if (!REDUCED) setTimeout(() => heroWave.setActive(true), 550)
 
 ;(function stars() {
   if (REDUCED) return
