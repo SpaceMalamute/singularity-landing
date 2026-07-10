@@ -130,15 +130,20 @@
 
   /* ── hero ──────────────────────────────────────────────── */
   .hero {
-    position: relative; min-height: calc(100svh - 64px);
+    position: relative; min-height: 100svh;
     display: flex; flex-direction: column; align-items: center; justify-content: center;
     padding: 88px 24px 84px; text-align: center; overflow: hidden;
   }
-  .hero > * { position: relative; }
-  #stars { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .arrival {
+    position: relative; min-height: 100svh;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    padding: 80px 24px; text-align: center; overflow: hidden;
+  }
+  .hero > *, .arrival > * { position: relative; z-index: 1; }
+  #stars { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 0; }
   .hero-glow {
-    position: absolute; left: 50%; top: 42%; width: 900px; height: 900px;
-    transform: translate(-50%, -50%);
+    position: absolute; left: 50%; top: 46%; width: 900px; height: 900px;
+    transform: translate(-50%, -50%); z-index: 0;
     background: radial-gradient(circle, rgba(67, 134, 244, 0.13) 0%, transparent 58%);
     opacity: 0.6; transition: opacity 1.2s ease; pointer-events: none;
   }
@@ -152,12 +157,13 @@
   }
   .hero-eyebrow .meteor { width: 22px; height: 20px; }
   .hero-logo {
-    width: min(460px, 72vw, 46svh);
+    width: min(500px, 76vw, 50svh);
     /* le viewBox garde ~24% de vide haut/bas pour l'enveloppe des ondes —
        on le compense en layout, les ondes débordent en transparence */
-    margin: calc(min(460px, 72vw, 46svh) * -0.13) 0 calc(min(460px, 72vw, 46svh) * -0.11);
-    animation: logoIn 1.5s 0.2s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+    margin: calc(min(500px, 76vw, 50svh) * -0.13) 0 calc(min(500px, 76vw, 50svh) * -0.11);
+    opacity: 0;
   }
+  .arrival.in .hero-logo { animation: logoIn 1.5s 0.1s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
   @keyframes logoIn {
     from { opacity: 0; transform: scale(0.92) translateY(24px); filter: blur(14px); }
     60% { filter: blur(0); }
@@ -166,9 +172,10 @@
   .hero-dialogue {
     min-height: 52px; display: flex; align-items: flex-start; justify-content: center;
     font-family: var(--font-mono); font-size: clamp(13px, 1.6vw, 16px);
-    color: var(--dim); margin-top: -6px; max-width: 640px;
-    animation: rise 1s 0.5s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+    color: var(--dim); margin-top: -2px; max-width: 640px;
+    opacity: 0;
   }
+  .arrival.in .hero-dialogue { animation: rise 1s 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
   .hero-dialogue .prompt { color: var(--accent); margin-right: 10px; user-select: none; }
   .hero-dialogue .typed { color: var(--white); text-align: left; }
   .caret {
@@ -179,22 +186,23 @@
   @keyframes blink { 50% { opacity: 0; } }
 
   .hero-wordmark {
-    font-size: clamp(38px, 7.8vw, 110px); line-height: 1;
-    margin-top: 38px;
+    font-size: clamp(48px, 10.5vw, 152px); line-height: 1;
+    margin-top: 30px;
     background: var(--grad); -webkit-background-clip: text; background-clip: text;
     -webkit-text-fill-color: transparent; color: transparent;
-    animation: rise 1.2s 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+    animation: rise 1.2s 0.35s cubic-bezier(0.2, 0.7, 0.2, 1) both;
   }
   .hero-tag {
     max-width: 620px; margin-top: 24px; font-size: clamp(15px, 1.9vw, 19px);
     line-height: 1.55; color: var(--dim); font-weight: 300;
-    animation: rise 1s 0.85s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+    animation: rise 1s 0.6s cubic-bezier(0.2, 0.7, 0.2, 1) both;
   }
   .hero-tag em { font-family: var(--font-serif); font-style: italic; color: var(--white); font-size: 1.12em; }
   .hero-ctas {
     display: flex; gap: 14px; margin-top: 36px; flex-wrap: wrap; justify-content: center;
-    animation: rise 1s 1s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+    opacity: 0;
   }
+  .arrival.in .hero-ctas { animation: rise 1s 1.1s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
   .btn {
     font-family: var(--font-mono); font-size: 13px; letter-spacing: 0.04em;
     padding: 14px 26px; border-radius: 999px; text-decoration: none;
@@ -225,12 +233,10 @@
     animation: beam 2s cubic-bezier(0.4, 0, 0.3, 1) infinite;
   }
   @keyframes beam { to { top: 100%; } }
-  /* viewports peu hauts (laptop) : tout le hero tient au-dessus du pli */
+  /* viewports peu hauts (laptop) : la rencontre tient au-dessus du pli */
   @media (max-height: 860px) {
     .hero { padding-top: 76px; }
     .hero-dialogue { min-height: 44px; }
-    .hero-wordmark { margin-top: 24px; font-size: clamp(34px, 6.4vw, 88px); }
-    .hero-tag { margin-top: 16px; font-size: 15px; }
     .hero-ctas { margin-top: 26px; }
   }
   @keyframes rise { from { opacity: 0; transform: translateY(26px); } to { opacity: 1; transform: none; } }
@@ -523,16 +529,8 @@
 <!-- ═══ HERO ═══ -->
 <header class="hero">
   <canvas id="stars"></canvas>
-  <div class="hero-glow" id="heroGlow"></div>
 
   <p class="hero-eyebrow"><svg class="meteor" aria-hidden="true"><use href="#meteor"/></svg> Meteor Factory présente</p>
-
-  <div class="hero-logo" id="heroLogo"></div>
-
-  <div class="hero-dialogue">
-    <span class="prompt">singularity&nbsp;›</span>
-    <span class="typed" id="typed"></span><span class="caret" id="caret"></span>
-  </div>
 
   <h1 class="hero-wordmark wordmark glitch" data-text="Singularity" id="wordmark">Singularity</h1>
 
@@ -541,13 +539,25 @@
     lance les agents dans le bon contexte et décuple votre potentiel de travail.
   </p>
 
+  <a class="hero-scroll" href="#rencontre" id="heroScroll"><span>franchir l'horizon</span><i class="scroll-beam"></i></a>
+</header>
+
+<!-- ═══ LA RENCONTRE — le logo arrive au scroll ═══ -->
+<section class="arrival" id="rencontre">
+  <div class="hero-glow" id="heroGlow"></div>
+
+  <div class="hero-logo" id="heroLogo"></div>
+
+  <div class="hero-dialogue">
+    <span class="prompt">singularity&nbsp;›</span>
+    <span class="typed" id="typed"></span><span class="caret" id="caret"></span>
+  </div>
+
   <div class="hero-ctas">
     <a class="btn btn-primary" href="#download"> Télécharger pour macOS</a>
     <a class="btn btn-ghost" href="#orchestration">Voir l'orchestration ↓</a>
   </div>
-
-  <a class="hero-scroll" href="#manifeste" id="heroScroll"><span>franchir l'horizon</span><i class="scroll-beam"></i></a>
-</header>
+</section>
 
 <!-- ═══ MANIFESTE ═══ -->
 <section class="manifeste" id="manifeste">
@@ -840,9 +850,6 @@ initGlitch(document.getElementById('glitchTitle'), { min: 2800, max: 6500 })
    HERO — particules aspirées + monologue tapé
    ═══════════════════════════════════════════════════════════ */
 const heroWave = createWaveform(document.getElementById('heroLogo'), { intensity: 1, sampleCount: 700 })
-// le logo arrive vivant : les ondes démarrent pendant l'entrée,
-// le monologue (1300ms) prend le relais puis les relâche en fin de phrase
-if (!REDUCED) setTimeout(() => heroWave.setActive(true), 550)
 
 ;(function stars() {
   if (REDUCED) return
@@ -903,7 +910,11 @@ if (!REDUCED) setTimeout(() => heroWave.setActive(true), 550)
     'Je lance mes agents — chacun dans le bon contexte. Jamais plus.',
     'Vous reviewez. Je merge. On recommence.',
   ]
-  if (REDUCED) { el.textContent = LINES[0]; return }
+  if (REDUCED) {
+    el.textContent = LINES[0]
+    document.getElementById('rencontre').classList.add('in')
+    return
+  }
   let li = 0
   function speak(text, done) {
     heroWave.setActive(true)
@@ -936,7 +947,19 @@ if (!REDUCED) setTimeout(() => heroWave.setActive(true), 550)
       erase(next)
     })
   }
-  setTimeout(next, 1300)
+
+  // la rencontre : le logo se révèle au scroll, ondule, puis parle
+  const arrival = document.getElementById('rencontre')
+  let met = false
+  const arrIO = new IntersectionObserver((entries) => {
+    if (!entries[0].isIntersecting || met) return
+    met = true
+    arrIO.disconnect()
+    arrival.classList.add('in')
+    setTimeout(() => heroWave.setActive(true), 450)
+    setTimeout(next, 1500)
+  }, { threshold: 0.4 })
+  arrIO.observe(arrival)
 })()
 
 /* ═══════════════════════════════════════════════════════════
