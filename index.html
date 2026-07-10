@@ -222,7 +222,7 @@
     animation: rise 1s 1.6s cubic-bezier(0.2, 0.7, 0.2, 1) both;
   }
   .hero-scroll:hover { color: var(--white); }
-  .hero-scroll.gone { opacity: 0; pointer-events: none; }
+  .hero-scroll.gone { opacity: 0; pointer-events: none; animation: none; }
   .scroll-beam {
     position: relative; width: 1px; height: 44px;
     background: var(--line-strong); overflow: hidden;
@@ -254,7 +254,7 @@
   .reveal.in { opacity: 1; transform: none; }
 
   /* ── manifeste ─────────────────────────────────────────── */
-  .manifeste { padding: clamp(110px, 16vh, 180px) 0; border-top: 1px solid var(--line); }
+  .manifeste { padding: clamp(110px, 16vh, 180px) 0; }
   .manifeste-grid {
     display: grid; grid-template-columns: 1.1fr 0.9fr;
     gap: clamp(36px, 6vw, 90px); align-items: center;
