@@ -222,7 +222,6 @@
     animation: rise 1s 1.6s cubic-bezier(0.2, 0.7, 0.2, 1) both;
   }
   .hero-scroll:hover { color: var(--white); }
-  .hero-scroll.gone { opacity: 0; pointer-events: none; animation: none; }
   .scroll-beam {
     position: relative; width: 1px; height: 44px;
     background: var(--line-strong); overflow: hidden;
@@ -1505,7 +1504,15 @@ const nav = document.getElementById('nav')
 const heroScroll = document.getElementById('heroScroll')
 window.addEventListener('scroll', () => {
   nav.classList.toggle('scrolled', window.scrollY > 40)
-  heroScroll.classList.toggle('gone', window.scrollY > 80)
+  // fade proportionnel au scroll (inline !important : prime sur l'animation d'entrée)
+  const o = Math.max(0, 1 - window.scrollY / 300)
+  if (window.scrollY > 0) {
+    heroScroll.style.setProperty('opacity', o.toFixed(3), 'important')
+    heroScroll.style.pointerEvents = o < 0.15 ? 'none' : ''
+  } else {
+    heroScroll.style.removeProperty('opacity')
+    heroScroll.style.pointerEvents = ''
+  }
 }, { passive: true })
 
 const revealIO = new IntersectionObserver(
