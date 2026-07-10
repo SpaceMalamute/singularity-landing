@@ -959,27 +959,143 @@ const heroWave = createWaveform(document.getElementById('heroLogo'), { intensity
 /* ═══════════════════════════════════════════════════════════
    DOT-MATRIX — mini moteur 7×7, port du sprite robot du DS
    ═══════════════════════════════════════════════════════════ */
-const GRID = 7
-const ROWS = ['OOOOOOO', 'O.....O', 'O.....O', 'O.E.E.O', 'O.....O', 'O.....O', 'OOOOOOO']
-const CHECK = [[1, 4], [2, 3], [3, 1], [4, 2], [3, 3]]
-const PERIM = (() => {
-  const cells = []
-  for (let c = 0; c < 7; c++) cells.push([0, c])
-  for (let r = 1; r < 7; r++) cells.push([r, 6])
-  for (let c = 5; c >= 0; c--) cells.push([6, c])
-  for (let r = 5; r >= 1; r--) cells.push([r, 0])
-  return cells
-})()
+// Port fidèle du moteur du DS (src/components/primitives/dot-matrix) :
+// LUT off→on avec fondu transparent sous OFF_FADE, roundRect modulé par
+// l'intensité, régime petit-format, crossfade 340ms, sprite robot original.
+const TAU = Math.PI * 2
+const wave = (t, period, phase, k) => (0.5 + 0.5 * Math.sin(TAU * (t / period - phase))) ** k
+const fract = (v) => v - Math.floor(v)
+const smoothstep = (x) => (x < 0 ? 0 : x > 1 ? 1 : x * x * (3 - 2 * x))
+
+const FADE_MS = 340
+const LUT_SIZE = 64
+const OFF_FADE = 0.1
+const COLOR_LIFT = 0.75
+const MATRIX_ON = [230, 230, 233] // --matrix-on (gray-12)
+const MATRIX_OFF = [26, 26, 29] // --matrix-off (gray-4)
 
 function hexToRgb(hex) {
   const n = parseInt(hex.slice(1), 16)
   return [(n >> 16) & 255, (n >> 8) & 255, n & 255]
 }
-function mix(a, b, t) {
-  return 'rgb(' + Math.round(a[0] + (b[0] - a[0]) * t) + ',' + Math.round(a[1] + (b[1] - a[1]) * t) + ',' + Math.round(a[2] + (b[2] - a[2]) * t) + ')'
+const DONE_RGB = hexToRgb('#34D399') // --status-done
+
+const GRID = 7
+const ROWS = ['OOOOOOO', 'O.....O', 'O.....O', 'O.E.E.O', 'O.....O', 'O.....O', 'OOOOOOO']
+const CHECK_ART = ['.......', '.....4.', '....3..', '.0.2...', '..1....', '.......', '.......']
+
+const DOTS = []
+for (let y = 0; y < GRID; y++) {
+  for (let x = 0; x < GRID; x++) {
+    const role = ROWS[y][x]
+    const c = CHECK_ART[y][x]
+    DOTS.push({
+      x, y, role,
+      hash: ((x * 211 + y * 97) % 89) / 89,
+      ang: (Math.atan2(y - 3, x - 3) / TAU + 1) % 1,
+      eye: role === 'E' && x >= 3 ? 1 : 0,
+      check: c === '.' ? undefined : Number(c),
+    })
+  }
 }
-const OFF_RGB = [30, 30, 34]
-const DIM_RGB = [64, 64, 72]
+
+function makeLut(on, off) {
+  const out = []
+  for (let i = 0; i < LUT_SIZE; i++) {
+    const w = i / (LUT_SIZE - 1)
+    if (w < OFF_FADE) {
+      out.push('rgba(' + off[0] + ',' + off[1] + ',' + off[2] + ',' + (w / OFF_FADE).toFixed(3) + ')')
+    } else {
+      const m = (w - OFF_FADE) / (1 - OFF_FADE)
+      out.push('rgb(' + ((off[0] + (on[0] - off[0]) * m) | 0) + ',' + ((off[1] + (on[1] - off[1]) * m) | 0) + ',' + ((off[2] + (on[2] - off[2]) * m) | 0) + ')')
+    }
+  }
+  return out
+}
+const lutCache = new Map()
+function cachedLut(on, off) {
+  const key = on.join() + '|' + off.join()
+  let lut = lutCache.get(key)
+  if (!lut) { lut = makeLut(on, off); lutCache.set(key, lut) }
+  return lut
+}
+const lerpRgb = (a, b, m) => [a[0] + (b[0] - a[0]) * m, a[1] + (b[1] - a[1]) * m, a[2] + (b[2] - a[2]) * m]
+
+const blinkGate = (bot, t) => (t >= bot.timers.blink && t < bot.timers.blink + 110 ? 0.06 : 1)
+
+function lineData(line) {
+  const h2 = fract(Math.sin(line * 311.7) * 12543.2)
+  const h3 = fract(Math.sin(line * 74.7) * 8765.4)
+  if (h3 < 0.06) return { empty: true, len: 0 }
+  return { empty: false, len: h2 < 0.12 ? 1 : h2 < 0.4 ? 2 : h2 < 0.7 ? 3 : h2 < 0.9 ? 4 : 5 }
+}
+
+const STATES = {
+  idle: (bot, d, t) => {
+    if (d.role === 'O') return 0.24 + 0.16 * wave(t, 4600, -d.ang, 2)
+    if (d.role === 'E') return 0.95 * blinkGate(bot, t)
+    return 0
+  },
+  thinking: (_bot, d, t) => {
+    if (d.role === 'O') return 0.08 + 0.8 * wave(t, 1250, -d.ang, 3.2)
+    if (d.role === 'E') return 0.3 + 0.6 * wave(t, 1250, d.eye * 0.5, 2)
+    return 0
+  },
+  // log npm : un curseur ultra-brillant écrit chaque ligne, l'historique
+  // remonte en s'assombrissant, le contour clignote comme des LED d'activité
+  running: (bot, d, t) => {
+    if (d.role === 'O') {
+      return 0.16 + 0.6 * Math.max(wave(t, 680, d.hash * 9.7, 7), 0.6 * wave(t, 1240, d.hash * 4.3, 5))
+    }
+    if (d.x > 0 && d.x < 6 && d.y > 0 && d.y < 6) {
+      const ix = d.x - 1
+      const iy = d.y - 1
+      const li = Math.floor(t / 380)
+      const p = t - li * 380
+      let target = 0
+      if (iy === 4) {
+        const line = lineData(li)
+        if (line.empty) {
+          if (ix === 0) target = 1
+        } else {
+          const cursor = Math.min(line.len - 1, Math.floor(p / 65))
+          if (ix < cursor) target = 0.5
+          else if (ix === cursor) target = 1
+        }
+      } else {
+        const past = li - (4 - iy)
+        if (past >= 0) {
+          const line = lineData(past)
+          if (!line.empty && ix < line.len) target = Math.max(0.16, 0.5 - 0.08 * (4 - iy))
+        }
+      }
+      const i = d.y * GRID + d.x
+      if (target >= 1) {
+        bot.mem[i] = 1
+        return 1
+      }
+      bot.mem[i] += (target - bot.mem[i]) * bot.k
+      return bot.mem[i]
+    }
+    return 0
+  },
+  // le check se dessine trait par trait, le contour s'illumine à la fin
+  done: (bot, d, t) => {
+    const p = (t - bot.stateAt) % 3200
+    if (d.role === 'O') {
+      const q = Math.max(0, 1 - Math.abs(p - 820) / 300)
+      return 0.26 + 0.24 * q * q
+    }
+    if (d.check !== undefined) {
+      let e = Math.min(1, Math.max(0, (p - d.check * 130) / 160))
+      if (p > 2500) e *= Math.max(0, 1 - (p - 2500) / 400)
+      return 0.95 * e * (0.9 + 0.1 * wave(t, 1400, d.check * 0.2, 1.5))
+    }
+    return 0
+  },
+}
+const floorLevel = (_state, d, t) => 0.04 + 0.022 * wave(t, 3600, d.hash, 1.4)
+const AMBIENT_FPS = { idle: 30, thinking: 60, running: 60, done: 30 }
 
 const allBots = []
 function createBot(canvas, colorHex, seed, sizePx) {
@@ -990,93 +1106,93 @@ function createBot(canvas, colorHex, seed, sizePx) {
   canvas.style.height = sizePx + 'px'
   const ctx = canvas.getContext('2d')
   ctx.scale(dpr, dpr)
-  const bot = { ctx, size: sizePx, color: hexToRgb(colorHex), seed, state: 'idle', stateAt: performance.now() / 1000 }
-  allBots.push(bot)
-  drawBot(bot, performance.now() / 1000)
+  const seedMs = Math.floor(seed * 9973) % 100000
+  const now = performance.now() + seedMs
+  const agent = hexToRgb(colorHex)
+  const onByState = { idle: MATRIX_ON, thinking: agent, running: agent, done: DONE_RGB }
+  const luts = {}
+  for (const s in onByState) luts[s] = cachedLut(onByState[s], MATRIX_OFF)
+  const inst = {
+    ctx, size: sizePx, seed: seedMs, onByState, luts, lastDraw: 0,
+    bot: {
+      state: 'idle', prev: 'idle', stateAt: now, fadeAt: -1e9, seed: seedMs,
+      mem: new Float32Array(GRID * GRID),
+      timers: { blink: REDUCED ? now + 9e5 : now + 900 + (seedMs % 900) },
+      k: 1, lastT: now,
+    },
+  }
+  allBots.push(inst)
+  drawBot(inst, now)
   return {
-    setState(s) { bot.state = s; bot.stateAt = performance.now() / 1000 },
-    get state() { return bot.state },
+    setState(s) {
+      const b = inst.bot
+      if (b.state === s) return
+      const tn = performance.now() + seedMs
+      b.prev = b.state
+      b.state = s
+      b.stateAt = tn
+      b.fadeAt = tn
+      if (REDUCED) drawBot(inst, tn)
+    },
+    get state() { return inst.bot.state },
   }
 }
 
-function drawBot(bot, now) {
-  const { ctx, size, color, seed, state } = bot
-  const t = now + seed * 13.7
-  const pitch = size / GRID
-  const radius = pitch * 0.32
+function drawBot(inst, t) {
+  const { ctx, bot, size } = inst
+  bot.k = 1 - Math.exp(-Math.max(0, t - bot.lastT) / 70)
+  bot.lastT = t
   ctx.clearRect(0, 0, size, size)
-
-  const intensity = Array.from({ length: GRID }, () => new Float32Array(GRID))
-  const breath = 0.5 + 0.5 * Math.sin(t * 1.4)
-  for (let r = 0; r < GRID; r++) {
-    for (let c = 0; c < GRID; c++) {
-      const role = ROWS[r][c]
-      if (role === 'O') intensity[r][c] = 0.16 + 0.06 * breath
-      else if (role === '.') intensity[r][c] = 0.05
-    }
+  const pitch = size / GRID
+  const origin = size / 2 - (GRID / 2) * pitch
+  const fade = smoothstep((t - bot.fadeAt) / FADE_MS)
+  if (fade >= 1) bot.prev = bot.state
+  const cur = STATES[bot.state]
+  const prev = fade < 1 ? STATES[bot.prev] : null
+  let lut = inst.luts[bot.state]
+  if (prev && inst.onByState[bot.prev] !== inst.onByState[bot.state]) {
+    lut = makeLut(lerpRgb(inst.onByState[bot.prev], inst.onByState[bot.state], fade), MATRIX_OFF)
   }
-
-  let eyeOffset = 0
-  let eyesOn = 1
-  const blinkPhase = (t * 0.23) % 1
-  if (blinkPhase < 0.035) eyesOn = 0
-
-  if (state === 'thinking') {
-    eyeOffset = Math.round(Math.sin(t * 3.2))
-    eyesOn = 1
-  } else if (state === 'running') {
-    const head = Math.floor(t * 14) % PERIM.length
-    for (let k = 0; k < 5; k++) {
-      const [r, c] = PERIM[(head - k + PERIM.length) % PERIM.length]
-      intensity[r][c] = Math.max(intensity[r][c], 1 - k * 0.2)
+  const small = pitch < 4
+  const sizeBase = small ? 0.55 : 0.4
+  const sizeSpan = small ? 0.45 : 0.34
+  const corner = small ? 0.08 : 0.18
+  const liftExp = small && COLOR_LIFT > 0 ? 1 - COLOR_LIFT : -1
+  for (const d of DOTS) {
+    let w = Math.min(1, Math.max(cur(bot, d, t), floorLevel(bot.state, d, t)))
+    if (prev) {
+      const pw = Math.min(1, Math.max(prev(bot, d, t), floorLevel(bot.prev, d, t)))
+      w = pw * (1 - fade) + w * fade
     }
-    eyeOffset = Math.round(Math.sin(t * 5))
-  } else if (state === 'done') {
-    const dt = now - bot.stateAt
-    for (let k = 0; k < CHECK.length; k++) {
-      if (dt > 0.07 * k) {
-        const [r, c] = CHECK[k]
-        intensity[r][c] = 1
-      }
+    if (w < 0.008) continue
+    if (small && w > OFF_FADE) {
+      w = OFF_FADE + (1 - OFF_FADE) * ((w - OFF_FADE) / (1 - OFF_FADE)) ** 0.7
     }
-    eyesOn = 0
+    const s = pitch * (sizeBase + sizeSpan * w)
+    let cw = w
+    if (liftExp >= 0 && w > OFF_FADE) {
+      const m = (w - OFF_FADE) / (1 - OFF_FADE)
+      cw = OFF_FADE + (1 - OFF_FADE) * m ** liftExp
+    }
+    ctx.fillStyle = lut[(cw * (LUT_SIZE - 1)) | 0]
+    ctx.beginPath()
+    ctx.roundRect(origin + (d.x + 0.5) * pitch - s / 2, origin + (d.y + 0.5) * pitch - s / 2, s, s, s * corner)
+    ctx.fill()
   }
-
-  if (state !== 'done') {
-    for (const c of [2, 4]) {
-      const cc = Math.max(1, Math.min(5, c + eyeOffset))
-      intensity[3][cc] = Math.max(intensity[3][cc], eyesOn)
-    }
-  }
-
-  for (let r = 0; r < GRID; r++) {
-    for (let c = 0; c < GRID; c++) {
-      const v = intensity[r][c]
-      if (v <= 0.01) {
-        ctx.fillStyle = 'rgb(30,30,34)'
-        ctx.globalAlpha = 0.55
-      } else if (v < 0.5) {
-        ctx.fillStyle = mix(OFF_RGB, DIM_RGB, v * 2)
-        ctx.globalAlpha = 1
-      } else {
-        ctx.fillStyle = mix(DIM_RGB, color, (v - 0.5) * 2)
-        ctx.globalAlpha = 1
-      }
-      ctx.beginPath()
-      ctx.arc(c * pitch + pitch / 2, r * pitch + pitch / 2, radius, 0, Math.PI * 2)
-      ctx.fill()
-    }
-  }
-  ctx.globalAlpha = 1
 }
 
 if (!REDUCED) {
   ;(function botTicker() {
-    let last = 0
     function frame(now) {
-      if (now - last > 1000 / 30) {
-        last = now
-        for (const b of allBots) drawBot(b, now / 1000)
+      for (const inst of allBots) {
+        const bot = inst.bot
+        const t = now + bot.seed
+        const fading = t - bot.fadeAt < FADE_MS
+        const fps = fading ? 60 : AMBIENT_FPS[bot.state] || 30
+        if (now - inst.lastDraw < 1000 / fps - 1) continue
+        inst.lastDraw = now
+        if (t > bot.timers.blink + 110) bot.timers.blink = t + 2400 + Math.random() * 2600
+        drawBot(inst, t)
       }
       requestAnimationFrame(frame)
     }
@@ -1414,18 +1530,23 @@ function drawGlyph(cv, art, colorHex, size) {
   const ctx = cv.getContext('2d')
   ctx.scale(dpr, dpr)
   const pitch = size / 7
+  const small = pitch < 4
+  const sizeBase = small ? 0.55 : 0.4
+  const sizeSpan = small ? 0.45 : 0.34
+  const corner = small ? 0.08 : 0.18
+  const colorLut = cachedLut(hexToRgb(colorHex), MATRIX_OFF)
+  const baseLut = cachedLut(MATRIX_ON, MATRIX_OFF)
   for (let r = 0; r < 7; r++) {
     for (let c = 0; c < 7; c++) {
       const ch = art[r][c]
-      if (ch === 'X') { ctx.fillStyle = colorHex; ctx.globalAlpha = 1 }
-      else if (ch === 'o' || ch === 'O') { ctx.fillStyle = '#3A3A42'; ctx.globalAlpha = 1 }
-      else { ctx.fillStyle = '#1E1E22'; ctx.globalAlpha = 0.5 }
+      const w = ch === 'X' ? 1 : ch === 'o' || ch === 'O' ? 0.42 : 0.06
+      const s = pitch * (sizeBase + sizeSpan * w)
+      ctx.fillStyle = (ch === 'X' ? colorLut : baseLut)[(w * (LUT_SIZE - 1)) | 0]
       ctx.beginPath()
-      ctx.arc(c * pitch + pitch / 2, r * pitch + pitch / 2, pitch * 0.3, 0, Math.PI * 2)
+      ctx.roundRect(c * pitch + pitch / 2 - s / 2, r * pitch + pitch / 2 - s / 2, s, s, s * corner)
       ctx.fill()
     }
   }
-  ctx.globalAlpha = 1
 }
 
 ;(function features() {
