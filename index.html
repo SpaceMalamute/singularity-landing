@@ -378,8 +378,7 @@
 
   @media (max-width: 940px) {
     .schema-grid { grid-template-columns: 1fr; gap: 36px; }
-    #traces { display: none; }
-    .schema { padding-top: 48px; }
+    .schema { padding-top: 48px; padding-left: 44px; }
     .schema-note.tr, .schema-note.br { display: none; }
   }
 
@@ -1113,35 +1112,56 @@ const TASKS = [
     return { left: r.left - p.left, right: r.right - p.left, top: r.top - p.top, bottom: r.bottom - p.top, cy: r.top - p.top + r.height / 2 }
   }
 
+  function setPts(a, pts) {
+    a.pts = pts
+    a.segLens = []
+    a.totalLen = 0
+    for (let i = 0; i < pts.length - 1; i++) {
+      const l = Math.abs(pts[i + 1][0] - pts[i][0]) + Math.abs(pts[i + 1][1] - pts[i][1])
+      a.segLens.push(l)
+      a.totalLen += l
+    }
+    a.trace.setAttribute('d', pts.map((p, i) => (i === 0 ? 'M' : 'L') + p[0] + ' ' + p[1]).join(' '))
+  }
+
   function layoutTraces() {
-    if (window.innerWidth <= 940) return
     const W = root.clientWidth, H = root.clientHeight
     traces.setAttribute('viewBox', '0 0 ' + W + ' ' + H)
+    const mobile = window.innerWidth <= 940
     const m = rectOf(masterFrame)
     const inp = rectOf(blkInput)
     const gap = 14
-    // input → master (orthogonal)
+
+    if (mobile) {
+      // layout empilé : colonne vertébrale verticale sur la gauche
+      const spineX = Math.max(14, inp.left - 18)
+      inputTrace.setAttribute('d', 'M' + (inp.left - gap / 2) + ' ' + inp.cy + ' H' + spineX + ' V' + m.cy + ' H' + (m.left - gap / 2))
+      for (const a of agents) {
+        const row = rectOf(a.row)
+        setPts(a, [
+          [m.left - gap / 2, m.cy],
+          [spineX, m.cy],
+          [spineX, row.cy],
+          [row.left - 6, row.cy],
+        ])
+        a.joint.setAttribute('cx', spineX)
+        a.joint.setAttribute('cy', row.cy)
+      }
+      return
+    }
+
+    // desktop : input → master, puis master → bus vertical → chaque rangée
     const midX = (inp.right + m.left) / 2
     inputTrace.setAttribute('d', 'M' + (inp.right + gap / 2) + ' ' + inp.cy + ' H' + midX + ' V' + m.cy + ' H' + (m.left - gap / 2))
-    // master → bus vertical → chaque rangée
     for (const a of agents) {
       const row = rectOf(a.row)
       const busX = (m.right + row.left) / 2
-      const pts = [
+      setPts(a, [
         [m.right + gap / 2, m.cy],
         [busX, m.cy],
         [busX, row.cy],
         [row.left - gap / 2, row.cy],
-      ]
-      a.pts = pts
-      a.segLens = []
-      a.totalLen = 0
-      for (let i = 0; i < pts.length - 1; i++) {
-        const l = Math.abs(pts[i + 1][0] - pts[i][0]) + Math.abs(pts[i + 1][1] - pts[i][1])
-        a.segLens.push(l)
-        a.totalLen += l
-      }
-      a.trace.setAttribute('d', 'M' + pts[0][0] + ' ' + pts[0][1] + ' L' + pts[1][0] + ' ' + pts[1][1] + ' L' + pts[2][0] + ' ' + pts[2][1] + ' L' + pts[3][0] + ' ' + pts[3][1])
+      ])
       a.joint.setAttribute('cx', busX)
       a.joint.setAttribute('cy', row.cy)
     }
@@ -1167,7 +1187,7 @@ const TASKS = [
     if (drawn) return
     drawn = true
     layoutTraces()
-    if (ANIME && !REDUCED && window.innerWidth > 940) {
+    if (ANIME && !REDUCED) {
       const paths = traces.querySelectorAll('.trace')
       ANIME.animate(ANIME.svg.createDrawable(paths), {
         draw: ['0 0', '0 1'],
