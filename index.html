@@ -141,13 +141,6 @@
   }
   .hero > *, .arrival > * { position: relative; z-index: 1; }
   #stars { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 0; pointer-events: none; }
-  .hero-glow {
-    position: absolute; left: 50%; top: 46%; width: 900px; height: 900px;
-    transform: translate(-50%, -50%); z-index: 0;
-    background: radial-gradient(circle, rgba(67, 134, 244, 0.13) 0%, transparent 58%);
-    opacity: 0.6; transition: opacity 1.2s ease; pointer-events: none;
-  }
-  .hero-glow.speaking { opacity: 1.25; }
 
   .hero-eyebrow {
     font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.35em;
@@ -541,8 +534,6 @@
 
 <!-- ═══ LA RENCONTRE — le logo arrive au scroll ═══ -->
 <section class="arrival" id="rencontre">
-  <div class="hero-glow" id="heroGlow"></div>
-
   <div class="hero-logo" id="heroLogo"></div>
 
   <div class="hero-dialogue">
@@ -909,7 +900,6 @@ const heroWave = createWaveform(document.getElementById('heroLogo'), { intensity
 
 ;(function monologue() {
   const el = document.getElementById('typed')
-  const glow = document.getElementById('heroGlow')
   const LINES = [
     'Bonjour. Je suis Singularity.',
     'Décrivez ce que vous voulez. Je découpe le travail en tickets atomiques.',
@@ -924,7 +914,6 @@ const heroWave = createWaveform(document.getElementById('heroLogo'), { intensity
   let li = 0
   function speak(text, done) {
     heroWave.setActive(true)
-    glow.classList.add('speaking')
     let i = 0
     const tick = () => {
       i++
@@ -932,7 +921,6 @@ const heroWave = createWaveform(document.getElementById('heroLogo'), { intensity
       if (i < text.length) setTimeout(tick, 26 + Math.random() * 34)
       else {
         heroWave.setActive(false)
-        glow.classList.remove('speaking')
         setTimeout(done, 2100)
       }
     }
